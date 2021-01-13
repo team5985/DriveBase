@@ -30,6 +30,9 @@ public class Robot extends TimedRobot {
   Spark RightDrive = new Spark(8);
   
   Joystick joystick = new Joystick(0);
+  double steerDirection = 0;
+  double power = 0;
+  double throttle = joystick.getThrottle();
 
   /**
    * This function is run when the robot is first started up and should be
@@ -101,8 +104,21 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void teleopPeriodic() {
+    if (power >= -0.025 && power <= 0.025) {
+      power = 0;
+    }
+    if (steerDirection >= -0.025 && steerDirection <= 0.025) {
+      steerDirection = 0;
+    }
+
+    System.out.println(throttle);
+
+    steerDirection = joystick.getX() * 2;
+    power = joystick.getY();
     LeftDrive.set(joystick.getX() + joystick.getY());
     RightDrive.set(joystick.getX() - joystick.getY());
+    
+    
   }
 
   /**
