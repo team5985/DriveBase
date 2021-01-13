@@ -32,7 +32,7 @@ public class Robot extends TimedRobot {
   Joystick joystick = new Joystick(0);
   double steerDirection = 0;
   double power = 0;
-  double throttle = joystick.getThrottle();
+  double throttle = 0;
 
   /**
    * This function is run when the robot is first started up and should be
@@ -111,12 +111,11 @@ public class Robot extends TimedRobot {
       steerDirection = 0;
     }
 
-    System.out.println(throttle);
-
-    steerDirection = joystick.getX() * 2;
-    power = joystick.getY();
-    LeftDrive.set(joystick.getX() + joystick.getY());
-    RightDrive.set(joystick.getX() - joystick.getY());
+    throttle = (-1 * joystick.getThrottle() + 1) / 2;
+    steerDirection = joystick.getX() * throttle;
+    power = joystick.getY() * throttle;
+    LeftDrive.set(steerDirection + power);
+    RightDrive.set(steerDirection - power);
     
     
   }
