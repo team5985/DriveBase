@@ -15,6 +15,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.auto.AutoMode;
 import frc.robot.subsystems.Drive;
+import edu.wpi.first.wpilibj.I2C;
 
 /**
  * The VM is configured to automatically run this class, and to call the
@@ -43,6 +44,10 @@ public class Robot extends TimedRobot {
   double power = 0;
   double throttle = 0;
 
+  UltrasonicI2C usi2c;
+  boolean usTrigger = false;
+
+
   /**
    * This function is run when the robot is first started up and should be
    * used for any initialization code.
@@ -53,6 +58,9 @@ public class Robot extends TimedRobot {
     m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
     m_chooser.addOption("My Auto", kCustomAuto);
     SmartDashboard.putData("Auto choices", m_chooser);
+    I2C.Port i2cp = I2C.Port.kOnboard;
+    I2C usLink = new I2C(i2cp, 0x13);
+    usi2c = new UltrasonicI2C(usLink);
   }
 
   /**
@@ -103,25 +111,71 @@ public class Robot extends TimedRobot {
   public void teleopInit() {
   }
 
+
+  double lastError = 0;
   /**
    * This function is called periodically during operator control.
    */
   @Override
   public void teleopPeriodic() {
-    if (power >= -0.025 && power <= 0.025) {
-      power = 0;
+    
+    
+    if(joystick.getTriggerPressed()) {
+      usTrigger = !usTrigger;
     }
-    if (steerDirection >= -0.025 && steerDirection <= 0.025) {
-      steerDirection = 0;
+    SmartDashboard.putBoolean("Trigger", usTrigger);
+    usi2c.update();
+    UltrasonicI2C.usResults results = usi2c.getResults();
+    double res;
+    if (results == null)
+    {
+      res = 0;
+    }
+    else
+    {
+
+      res = results.getResult();
+    }
+    SmartDashboard.putNumber("Distance", res);
+
+
+    if (!usTrigger)
+    {
+      if (power >= -0.025 && power <= 0.025) {
+        power = 0;
+      }
+      if (steerDirection >= -0.025 && steerDirection <= 0.025) {
+        steerDirection = 0;
+      }
+
+      throttle = (-1 * joystick.getThrottle() + 1) / 2;
+      steerDirection = joystick.getX() * throttle;
+      power = -1 * joystick.getY() * throttle;
+      LeftDrive.set(steerDirection - power);
+      RightDrive.set(steerDirection + power);
+    }
+    else
+    {
+
+      double aimPos = 300;
+      double gain = 0.0005;
+      double dgain = 0.01;
+
+
+
+      if (results.getNew())
+      {
+        double error = aimPos - results.getResult();
+        double delta = error - lastError;
+        lastError = error;
+        steerDirection = (error * gain) + (delta * dgain);
+        power = 1;
+        LeftDrive.set(steerDirection - power);
+        RightDrive.set(steerDirection + power);
+      }
     }
 
-    throttle = (-1 * joystick.getThrottle() + 1) / 2;
-    steerDirection = joystick.getX() * throttle;
-    power = joystick.getY() * throttle;
-    LeftDrive.set(steerDirection + power);
-    RightDrive.set(steerDirection - power);
-    
-    
+
   }
 
   /**
