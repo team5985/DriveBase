@@ -25,184 +25,218 @@ import edu.wpi.first.wpilibj.I2C;
  * project.
  */
 public class Robot extends TimedRobot {
-  private static final String kDefaultAuto = "Default";
-  private static final String kCustomAuto = "My Auto";
-  private String m_autoSelected;
-  private final SendableChooser<String> m_chooser = new SendableChooser<>();
-  AutoController m_AutoController;
+    private static final String kDefaultAuto = "Default";
+    private static final String kCustomAuto = "My Auto";
+    private String m_autoSelected;
+    private final SendableChooser<String> m_chooser = new SendableChooser<>();
+    AutoController m_AutoController;
 
-  Drive drive = Drive.getInstance();
+    Drive drive = Drive.getInstance();
 
-  Spark LeftDrive = new Spark(7);
-  Spark RightDrive = new Spark(8);
+    Spark LeftDrive = new Spark(7);
+    Spark RightDrive = new Spark(8);
 
-  Encoder LeftEnc = new Encoder(1, 2); 
-  Encoder RightEnc = new Encoder(3, 4);
-  
-  Joystick joystick = new Joystick(0);
-  double steerDirection = 0;
-  double power = 0;
-  double throttle = 0;
+    Encoder LeftEnc = new Encoder(1, 2); 
+    Encoder RightEnc = new Encoder(3, 4);
 
-  UltrasonicI2C usi2c;
-  boolean usTrigger = false;
+    Joystick joystick = new Joystick(0);
+    double steerDirection = 0;
+    double power = 0;
+    double throttle = 0;
 
+    UltrasonicI2C usi2c;
+    boolean usTrigger = false;
+    boolean usRevButton = false;
+    double totalDistanceTravelled = 0;
+    double encoderDistance = 0;
 
-  /**
-   * This function is run when the robot is first started up and should be
-   * used for any initialization code.
-   */
-  @Override
-  public void robotInit() {
-    drive.setSystem(LeftDrive, RightDrive, RightEnc, LeftEnc);
-    m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
-    m_chooser.addOption("My Auto", kCustomAuto);
-    SmartDashboard.putData("Auto choices", m_chooser);
-    I2C.Port i2cp = I2C.Port.kOnboard;
-    I2C usLink = new I2C(i2cp, 0x13);
-    usi2c = new UltrasonicI2C(usLink);
-  }
+    /**
+     * This function is run when the robot is first started up and should be
+     * used for any initialization code.
+     */
+    @Override
+    public void robotInit() {
+        drive.setSystem(LeftDrive, RightDrive, RightEnc, LeftEnc);
+        m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
+        m_chooser.addOption("My Auto", kCustomAuto);
+        SmartDashboard.putData("Auto choices", m_chooser);
+        I2C.Port i2cp = I2C.Port.kOnboard;
+        I2C usLink = new I2C(i2cp, 0x13);
+        usi2c = new UltrasonicI2C(usLink);
+    }
 
-  /**
-   * This function is called every robot packet, no matter the mode. Use
-   * this for items like diagnostics that you want ran during disabled,
-   * autonomous, teleoperated and test.
-   *
-   * <p>This runs after the mode specific periodic functions, but before
-   * LiveWindow and SmartDashboard integrated updating.
-   */
-  @Override
-  public void robotPeriodic() {
+    /**
+     * This function is called every robot packet, no matter the mode. Use
+     * this for items like diagnostics that you want ran during disabled,
+     * autonomous, teleoperated and test.
+     *
+     * <p>This runs after the mode specific periodic functions, but before
+     * LiveWindow and SmartDashboard integrated updating.
+     */
+    @Override
+    public void robotPeriodic() {
+    }
 
-  }
+    /**
+     * This autonomous (along with the chooser code above) shows how to select
+     * between different autonomous modes using the dashboard. The sendable
+     * chooser code works with the Java SmartDashboard. If you prefer the
+     * LabVIEW Dashboard, remove all of the chooser code and uncomment the
+     * getString line to get the auto name from the text box below the Gyro
+     *
+     * <p>You can add additional auto modes by adding additional comparisons to
+     * the switch structure below with additional strings. If using the
+     * SendableChooser make sure to add them to the chooser code above as well.
+     */
+    @Override
+    public void autonomousInit() {
+        m_autoSelected = m_chooser.getSelected();
+        // m_autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
+        System.out.println("Auto selected: " + m_autoSelected);
+        m_AutoController.getInstance().initialiseAuto();
+    }
 
-  /**
-   * This autonomous (along with the chooser code above) shows how to select
-   * between different autonomous modes using the dashboard. The sendable
-   * chooser code works with the Java SmartDashboard. If you prefer the
-   * LabVIEW Dashboard, remove all of the chooser code and uncomment the
-   * getString line to get the auto name from the text box below the Gyro
-   *
-   * <p>You can add additional auto modes by adding additional comparisons to
-   * the switch structure below with additional strings. If using the
-   * SendableChooser make sure to add them to the chooser code above as well.
-   */
-  @Override
-  public void autonomousInit() {
-    m_autoSelected = m_chooser.getSelected();
-    // m_autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
-    System.out.println("Auto selected: " + m_autoSelected);
-    m_AutoController.getInstance().initialiseAuto();
-  }
-
-  /**
-   * This function is called periodically during autonomous.
-   */
-  @Override
-  public void autonomousPeriodic() {
-    m_AutoController.getInstance().runAuto();
+    /**
+     * This function is called periodically during autonomous.
+    */
+    @Override
+    public void autonomousPeriodic() {
+        m_AutoController.getInstance().runAuto();
     }
   
 
-  /**
-   * This function is called once when teleop is enabled.
-   */
-  @Override
-  public void teleopInit() {
-  }
-
-
-  double lastError = 0;
-  /**
-   * This function is called periodically during operator control.
-   */
-  @Override
-  public void teleopPeriodic() {
-    
-    
-    if(joystick.getTriggerPressed()) {
-      usTrigger = !usTrigger;
-    }
-    SmartDashboard.putBoolean("Trigger", usTrigger);
-    usi2c.update();
-    UltrasonicI2C.usResults results = usi2c.getResults();
-    double res;
-    if (results == null)
-    {
-      res = 0;
-    }
-    else
-    {
-
-      res = results.getResult();
-    }
-    SmartDashboard.putNumber("Distance", res);
-
-
-    if (!usTrigger)
-    {
-      if (power >= -0.025 && power <= 0.025) {
-        power = 0;
-      }
-      if (steerDirection >= -0.025 && steerDirection <= 0.025) {
-        steerDirection = 0;
-      }
-
-      throttle = (-1 * joystick.getThrottle() + 1) / 2;
-      steerDirection = joystick.getX() * throttle;
-      power = -1 * joystick.getY() * throttle;
-      LeftDrive.set(steerDirection - power);
-      RightDrive.set(steerDirection + power);
-    }
-    else
-    {
-
-      double aimPos = 300;
-      double gain = 0.0005;
-      double dgain = 0.01;
-
-
-
-      if (results.getNew())
-      {
-        double error = aimPos - results.getResult();
-        double delta = error - lastError;
-        lastError = error;
-        steerDirection = (error * gain) + (delta * dgain);
-        power = 1;
-        LeftDrive.set(steerDirection - power);
-        RightDrive.set(steerDirection + power);
-      }
+    /**
+     * This function is called once when teleop is enabled.
+     */
+    @Override
+    public void teleopInit() {
     }
 
 
-  }
+    double lastError = 0;
+    /**
+     * This function is called periodically during operator control.
+     */
+    @Override
+    public void teleopPeriodic() {
+        encoderDistance = (LeftEnc.getDistance() + RightEnc.getDistance()) / 2;
+                
+        if (joystick.getTriggerPressed()) {
+            /*if (usTrigger) {
+                totalDistanceTravelled += encoderDistance;
+            }
+            */
+            if (usRevButton) {
+                usRevButton = !usRevButton;
+                usTrigger = !usTrigger;
+            } 
+            else {
+                usTrigger = !usTrigger;
+            }
+            LeftEnc.reset();
+            RightEnc.reset();
+        }
+        if (joystick.getRawButtonPressed(2)) {
+            /*if (usTrigger) {
+                totalDistanceTravelled += encoderDistance;
+            }
+            */
+            if (usTrigger) {
+                usTrigger = !usTrigger;
+                usRevButton = !usRevButton;
+            } 
+            else {
+                usRevButton = !usRevButton;
+            }
+            LeftEnc.reset();
+            RightEnc.reset();
+        }
+        SmartDashboard.putBoolean("Trigger", usTrigger);
+        SmartDashboard.putBoolean("Reverse", usRevButton);
+        usi2c.update();
+        UltrasonicI2C.usResults results = usi2c.getResults();
+        double res;
+        if (results == null) {
+            res = 0;
+        }
+        else {
+            res = results.getResult();
+        }
+        SmartDashboard.putNumber("Distance", res);
 
-  /**
-   * This function is called once when the robot is disabled.
-   */
-  @Override
-  public void disabledInit() {
-  }
+        double aimPos = 300; // how far away from the wall we want to be in mm
+        double gain = 0.0005; // how fast we correct ourselves
+        double dgain = 0.01; // change in gain
 
-  /**
-   * This function is called periodically when disabled.
-   */
-  @Override
-  public void disabledPeriodic() {
-  }
+        if (usTrigger) {
+            if (results.getNew()) {
+                double error = aimPos - results.getResult(); // how far off from aimPos we are
+                double delta = error - lastError; // the change between error and lastError
+                lastError = error;
+                steerDirection = (error * gain) + (delta * dgain);
+                power = 1;
+                LeftDrive.set(steerDirection - power);
+                RightDrive.set(steerDirection + power);
+                SmartDashboard.putNumber("Encoder", encoderDistance);
+                SmartDashboard.putNumber("Distance Travelled", totalDistanceTravelled);
 
-  /**
-   * This function is called once when test mode is enabled.
-   */
-  @Override
-  public void testInit() {
-  }
+            }
+        }    
+        else if (usRevButton) {
+            if (results.getNew()) {
+                double error = aimPos - results.getResult(); // how far off from aimPos we are
+                double delta = error - lastError; // the change between error and lastError
+                lastError = error;
 
-  /**
-   * This function is called periodically during test mode.
-   */
-  @Override
-  public void testPeriodic() {
-  }
+                steerDirection = (error * gain) + (delta * dgain);
+                power = 1;
+                LeftDrive.set(-1 * (steerDirection - power));
+                RightDrive.set(-1 * (steerDirection + power));
+                SmartDashboard.putNumber("Encoder", encoderDistance);
+                SmartDashboard.putNumber("Distance Travelled", totalDistanceTravelled);
+            }
+        }
+        else {
+            // TODO deadzone broke
+            if (power >= -0.025 && power <= 0.025) {
+                power = 0;
+            }
+            if (steerDirection >= -0.025 && steerDirection <= 0.025) {
+                steerDirection = 0;
+            }
+            throttle = (-1 * joystick.getThrottle() + 1) / 2;
+            steerDirection = joystick.getX() * throttle;
+            power = -1 * joystick.getY() * throttle;
+            LeftDrive.set(steerDirection - power);
+            RightDrive.set(steerDirection + power);
+        }
+    }
+
+    /**
+     * This function is called once when the robot is disabled.
+     */
+    @Override
+    public void disabledInit() {
+    }
+
+    /**
+     * This function is called periodically when disabled.
+     */
+    @Override
+    public void disabledPeriodic() {
+    }
+
+    /**
+     * This function is called once when test mode is enabled.
+     */
+    @Override
+    public void testInit() {
+    }
+
+    /**
+     * This function is called periodically during test mode.
+     */
+    @Override
+    public void testPeriodic() {
+    }
 }
