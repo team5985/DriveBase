@@ -44,7 +44,8 @@ public class Robot extends TimedRobot {
     double power = 0;
     double throttle = 0;
 
-    UltrasonicI2C usi2c;
+    UltrasonicI2C usi2cl;
+    UltrasonicI2C usi2cr;
     boolean usTrigger = false;
     boolean usRevButton = false;
     double totalDistanceTravelled = 0;
@@ -61,8 +62,10 @@ public class Robot extends TimedRobot {
         m_chooser.addOption("My Auto", kCustomAuto);
         SmartDashboard.putData("Auto choices", m_chooser);
         I2C.Port i2cp = I2C.Port.kOnboard;
-        I2C usLink = new I2C(i2cp, 0x13);
-        usi2c = new UltrasonicI2C(usLink);
+        I2C usLinkl = new I2C(i2cp, 0x13);
+        I2C usLinkr = new I2C(i2cp, 0x14);
+        usi2cl = new UltrasonicI2C(usLinkl);
+        usi2cr = new UltrasonicI2C(usLinkr);
     }
 
     /**
@@ -101,6 +104,8 @@ public class Robot extends TimedRobot {
     */
     @Override
     public void autonomousPeriodic() {
+        usi2cl.update();
+        usi2cr.update();
         m_AutoController.getInstance().runAuto();
     }
   
@@ -119,6 +124,8 @@ public class Robot extends TimedRobot {
      */
     @Override
     public void teleopPeriodic() {
+        usi2cl.update();
+        usi2cr.update();
         encoderDistance = (LeftEnc.getDistance() + RightEnc.getDistance()) / 2;
                 
         if (joystick.getTriggerPressed()) {
@@ -153,51 +160,114 @@ public class Robot extends TimedRobot {
         }
         SmartDashboard.putBoolean("Trigger", usTrigger);
         SmartDashboard.putBoolean("Reverse", usRevButton);
-        usi2c.update();
-        UltrasonicI2C.usResults results = usi2c.getResults();
-        double res;
-        if (results == null) {
-            res = 0;
+        UltrasonicI2C.usResults resultsr = usi2cr.getResults();
+        double resr;
+        if (resultsr == null) {
+            resr = 0;
         }
         else {
-            res = results.getResult();
+            resr = resultsr.getResult();
         }
-        SmartDashboard.putNumber("Distance", res);
+        SmartDashboard.putNumber("Distance right", resr);
+        UltrasonicI2C.usResults resultsl = usi2cl.getResults();
+        double resl;
+        if (resultsl == null) {
+            resl = 0;
+        }
+        else {
+            resl = resultsl.getResult();
+        }
+        SmartDashboard.putNumber("Distance left", resl);
 
-        double aimPos = 300; // how far away from the wall we want to be in mm
-        double gain = 0.0005; // how fast we correct ourselves
-        double dgain = 0.01; // change in gain
+        double aimPos = 400; // how far away from the wall we want to be in mm
+        double gain = 0.00025; // how fast we correct ourselves
+        double dgain = 0.005; // change in gain
+        double speed = 1;
+        double leftPower;
+        double rightPower;
 
         if (usTrigger) {
-            if (results.getNew()) {
-                double error = aimPos - results.getResult(); // how far off from aimPos we are
+            if (resultsl.getNew()) {
+                double error = aimPos - resultsl.getResult(); // how far off from aimPos we are
                 double delta = error - lastError; // the change between error and lastError
                 lastError = error;
                 steerDirection = (error * gain) + (delta * dgain);
-                power = 1;
-                LeftDrive.set(steerDirection - power);
-                RightDrive.set(steerDirection + power);
+                power = speed;
+                double leftCorrect = 0;
+                double rightCorrect = 0;
+                double pOutput = error * gain;
+                double dOutput = delta * dgain;
+                if(steerDirection + power > 1) {
+                    leftCorrect = (steerDirection + power) - 1;
+                }
+                if(steerDirection - power > 1) {
+                    rightCorrect = (steerDirection - power) - 1;
+                }
+                if(steerDirection + power < -1) {
+                    leftCorrect = (steerDirection + power) + 1;
+                }
+                if(steerDirection - power < -1) {
+                    rightCorrect = (steerDirection - power) + 1;
+                }
+                SmartDashboard.putNumber("steerDirection", steerDirection);
+                SmartDashboard.putNumber("power", power);
+                SmartDashboard.putNumber("leftCorrect", leftCorrect);
+                SmartDashboard.putNumber("rightCorrect", rightCorrect);
+                SmartDashboard.putNumber("pOutput", pOutput);
+                SmartDashboard.putNumber("dOutput", dOutput);
+
+                //LeftDrive.set(steerDirection - power - leftCorrect);
+                //RightDrive.set(steerDirection + power - rightCorrect);
+                leftPower = power - steerDirection;
+                rightPower = steerDirection + power;
+                steerPriority(leftPower, rightPower);
                 SmartDashboard.putNumber("Encoder", encoderDistance);
                 SmartDashboard.putNumber("Distance Travelled", totalDistanceTravelled);
 
             }
         }    
         else if (usRevButton) {
-            if (results.getNew()) {
-                double error = aimPos - results.getResult(); // how far off from aimPos we are
+            if (resultsl.getNew()) {
+                double error = aimPos - resultsl.getResult(); // how far off from aimPos we are
                 double delta = error - lastError; // the change between error and lastError
                 lastError = error;
 
-                steerDirection = (error * gain) + (delta * dgain);
-                power = 1;
-                LeftDrive.set(-1 * (steerDirection - power));
-                RightDrive.set(-1 * (steerDirection + power));
+                steerDirection = (error * -gain) + (delta * -dgain);
+                power = -speed;
+                double leftCorrect = 0;
+                double rightCorrect = 0;
+                double pOutput = error * -gain;
+                double dOutput = delta * -dgain;
+                if(steerDirection + power > 1) {
+                    leftCorrect = (steerDirection + power) - 1;
+                }
+                if(steerDirection - power > 1) {
+                    rightCorrect = (steerDirection - power) - 1;
+                }
+                if(steerDirection + power < -1) {
+                    leftCorrect = (steerDirection + power) + 1;
+                }
+                if(steerDirection - power < -1) {
+                    rightCorrect = (steerDirection - power) + 1;
+                }
+                SmartDashboard.putNumber("steerDirection", steerDirection);
+                SmartDashboard.putNumber("power", power);
+                SmartDashboard.putNumber("leftCorrect", leftCorrect);
+                SmartDashboard.putNumber("rightCorrect", rightCorrect);
+                SmartDashboard.putNumber("pOutput", pOutput);
+                SmartDashboard.putNumber("dOutput", dOutput);
+
+                //LeftDrive.set(steerDirection - power - leftCorrect);
+                //RightDrive.set(steerDirection + power - rightCorrect);
+                leftPower = power - steerDirection;
+                rightPower = steerDirection + power;
+                steerPriority(leftPower, rightPower);
+
                 SmartDashboard.putNumber("Encoder", encoderDistance);
                 SmartDashboard.putNumber("Distance Travelled", totalDistanceTravelled);
             }
         }
         else {
-            // TODO deadzone broke
             if (power >= -0.025 && power <= 0.025) {
                 power = 0;
             }
@@ -207,10 +277,40 @@ public class Robot extends TimedRobot {
             throttle = (-1 * joystick.getThrottle() + 1) / 2;
             steerDirection = joystick.getX() * throttle;
             power = -1 * joystick.getY() * throttle;
-            LeftDrive.set(steerDirection - power);
-            RightDrive.set(steerDirection + power);
+            steerPriority(power - steerDirection, steerDirection + power);
+            steerDirection = 0;
+            SmartDashboard.putNumber("steerDirection", steerDirection);
         }
     }
+
+private void steerPriority(double left, double right)
+{
+    if (left - right > 2)
+    {
+        left = 1;
+        right = -1;
+    }
+    else if (right - left > 2)
+    {
+        left = -1;
+        right = 1;
+    }
+    else if (Math.max(right, left) > 1)
+    {
+        left = left - (Math.max(right,left) - 1);
+        right = right - (Math.max(right,left) - 1);
+    }
+    else if (Math.min(right, left) < -1)
+    {
+        left = left - (Math.min(right,left) + 1);
+        right = right - (Math.min(right,left) + 1);
+    }
+    SmartDashboard.putNumber("leftPower", left);
+    SmartDashboard.putNumber("rightPower", left);
+    SmartDashboard.putNumber("SteerLeft", left-right);
+    LeftDrive.set(-left);
+    RightDrive.set(right);
+}
 
     /**
      * This function is called once when the robot is disabled.
@@ -224,6 +324,8 @@ public class Robot extends TimedRobot {
      */
     @Override
     public void disabledPeriodic() {
+        usi2cl.update();
+        usi2cr.update();
     }
 
     /**
