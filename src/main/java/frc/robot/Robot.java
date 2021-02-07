@@ -8,6 +8,7 @@
 package frc.robot;
 
 import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.PowerDistributionPanel;
 import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Encoder;
@@ -50,6 +51,7 @@ public class Robot extends TimedRobot {
     boolean usRevButton = false;
     double totalDistanceTravelled = 0;
     double encoderDistance = 0;
+    PowerDistributionPanel PDP = new PowerDistributionPanel(0);
 
     /**
      * This function is run when the robot is first started up and should be
@@ -67,7 +69,6 @@ public class Robot extends TimedRobot {
         usi2cl = new UltrasonicI2C(usLinkl);
         usi2cr = new UltrasonicI2C(usLinkr);
     }
-
     /**
      * This function is called every robot packet, no matter the mode. Use
      * this for items like diagnostics that you want ran during disabled,
@@ -117,13 +118,18 @@ public class Robot extends TimedRobot {
     public void teleopInit() {
     }
 
-
+    double delta;
     double lastError = 0;
     /**
      * This function is called periodically during operator control.
      */
     @Override
     public void teleopPeriodic() {
+        // 0 1 14 15
+        SmartDashboard.putNumber("0", PDP.getCurrent(0));
+        SmartDashboard.putNumber("1", PDP.getCurrent(1));
+        SmartDashboard.putNumber("14", PDP.getCurrent(14));
+        SmartDashboard.putNumber("15", PDP.getCurrent(15));
         usi2cl.update();
         usi2cr.update();
         SmartDashboard.putNumber("BadCRC", usi2cl.myCountBadCRC);
@@ -164,12 +170,15 @@ public class Robot extends TimedRobot {
         }
         SmartDashboard.putNumber("Distance left", resl);
 
-        double aimPos = 400; // how far away from the wall we want to be in mm
+        double aimPos = 300; // how far away from the wall we want to be in mm
         double pgain = 0.00025; // how fast we correct ourselves
         double dgain = 0.005; // change in gain
         double speed = 1;
         double leftPower;
         double rightPower;
+        pgain = 0.00025;
+        dgain = 0.005;
+        speed = 1;
 
         if (usTrigger)
         {
@@ -187,13 +196,17 @@ public class Robot extends TimedRobot {
                 dirDGain = -dirDGain;
             }
             double error = aimPos - resultsl.getResult(); // how far off from aimPos we are
-            double delta = error - lastError; // the change between error and lastError
-            lastError = error;
+            if (resultsl.getNew())
+            {
+                delta = error - lastError; // the change between error and lastError
+                lastError = error;
+            }
             steerDirection = (error * dirPGain) + (delta * dirDGain);
             double pOutput = error * dirPGain;
             double dOutput = delta * dirDGain;
             SmartDashboard.putNumber("pOutput", pOutput);
             SmartDashboard.putNumber("dOutput", dOutput);
+            SmartDashboard.putNumber("Error", error);
             leftPower = power - steerDirection;
             rightPower = steerDirection + power;
             steerPriority(leftPower, rightPower);
