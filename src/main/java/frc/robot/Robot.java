@@ -11,6 +11,9 @@ import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PowerDistributionPanel;
 import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.TimedRobot;
+
+import com.kauailabs.navx.frc.AHRS;
+
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -38,7 +41,7 @@ public class Robot extends TimedRobot {
     Spark RightDrive = new Spark(8);
 
 
-
+    
     Encoder LeftEnc = new Encoder(1, 2); 
     Encoder RightEnc = new Encoder(3, 4);
 
@@ -54,13 +57,13 @@ public class Robot extends TimedRobot {
     double totalDistanceTravelled = 0;
     double encoderDistance = 0;
     PowerDistributionPanel PDP = new PowerDistributionPanel(0);
+    AHRS navx = new AHRS();
     
 
-    BasicMotorCheck checkLeftDrive1 = new BasicMotorCheck(LeftDrive,0 , PDP);
-    BasicMotorCheck checkLeftDrive2 = new BasicMotorCheck(LeftDrive,1 , PDP);
-
-    BasicMotorCheck checkRightDrive1 = new BasicMotorCheck(RightDrive,14, PDP);
-    BasicMotorCheck checkRightDrive2 = new BasicMotorCheck(RightDrive,15, PDP);
+    BasicMotorCheck checkLeftDrive1 = new BasicMotorCheck(LeftDrive,0 , PDP, null, LeftEnc);
+    BasicMotorCheck checkLeftDrive2 = new BasicMotorCheck(LeftDrive,1 , PDP, null, LeftEnc);
+    BasicMotorCheck checkRightDrive1 = new BasicMotorCheck(RightDrive,14, PDP, null, RightEnc);
+    BasicMotorCheck checkRightDrive2 = new BasicMotorCheck(RightDrive,15, PDP, null, RightEnc);
 
 
     /**
@@ -133,17 +136,33 @@ public class Robot extends TimedRobot {
     double lastError = 0;
     double outSpeed = 0;
     boolean useRightSensor = false;
+    boolean ultrasonicWallFollower = false;
+
+    // Variables for the sequenced hybrid controller
+    boolean sequencedHybrid = true;
+    int stepNo = 0;
+    double startDist = -1;
+    double stepTwoAngle = 0;
+    double stepTwoDist = 0;
 
     /**
      * This function is called periodically during operator control.
      */
     @Override
     public void teleopPeriodic() {
+        // left 27028.5
+        // right 27025
+        // Distanc e travelled = 6142mm
+        // Calibration constant = 4.400317 counts per mm
+        // So 4.4 counts / mm is accurate to 1mm every 10m!
         checkLeftDrive1.update();
         checkLeftDrive2.update();
         checkRightDrive1.update();
         checkRightDrive2.update();
         
+        SmartDashboard.putNumber("leftenc", LeftEnc.getDistance());
+        SmartDashboard.putNumber("rightnc", RightEnc.getDistance());
+
 
         SmartDashboard.putNumber("LeftDrive1 Check", checkLeftDrive1.BasicMotorCheck());
         SmartDashboard.putNumber("LeftDrive2 Check", checkLeftDrive2.BasicMotorCheck());
@@ -161,22 +180,30 @@ public class Robot extends TimedRobot {
         SmartDashboard.putNumber("BadMeasurement", usi2cl.myCountBadMeas);
         encoderDistance = (LeftEnc.getDistance() + RightEnc.getDistance()) / 2;
                 
+        SmartDashboard.putNumber("Gyro", navx.getYaw());
         if (joystick.getTriggerPressed()) {
             usTrigger = !usTrigger;
             usRevButton = false;
             outSpeed = 0;
             LeftEnc.reset();
             RightEnc.reset();
+
+            stepNo = 0;
         }
         if (joystick.getRawButtonPressed(2)) {
             if (usTrigger) {
                 usRevButton = !usRevButton;
             } 
-            LeftEnc.reset();
-            RightEnc.reset();
         }
         if (joystick.getRawButtonPressed(7)) {
             useRightSensor = !useRightSensor;
+        }
+        if (joystick.getRawButtonPressed(8)) {
+            LeftEnc.reset();
+            RightEnc.reset();
+        }
+        if (joystick.getRawButtonPressed(12)) {
+            navx.reset();
         }
         SmartDashboard.putBoolean("Trigger", usTrigger);
         SmartDashboard.putBoolean("Reverse", usRevButton);
@@ -198,58 +225,123 @@ public class Robot extends TimedRobot {
             resl = resultsl.getResult();
         }
         SmartDashboard.putNumber("Distance left", resl);
-
-        double aimPos = 300; // how far away from the wall we want to be in mm
-        double pgain = 0.00025; // how fast we correct ourselves
-        double dgain = 0.005; // change in gain
-        double speed = 1;
-        double leftPower;
-        double rightPower;
-        pgain = 0.00025;
-        dgain = 0.005;
-        speed = 1;
-        double accRate = 0.05;
+        SmartDashboard.putNumber("Step Number", stepNo);
 
         if (usTrigger)
         {
-            double power = speed;
-            if (usRevButton)
+            if (sequencedHybrid)
             {
-                power = -speed;
-            }
+                //Check transitions
+                switch (stepNo)
+                {
+                    case 0:
+                        if (Math.abs(navx.getYaw()) < 1)
+                        {
+                            stepNo = 1;
+                        }
+                    break;
+                    case 1:
+                        if (startDist > 0)
+                        {
+                            stepNo = 2;
+                        }
+                break;
+                    case 2:
+                        if (Math.abs(stepTwoAngle - navx.getYaw()) < 1)
+                        {
+                            stepNo = 3;
+                        }
+                    break;
+                    case 3:
+                    break;
+                    default:
+                        stepNo = 0;
+                    break;
+                }
+                double error = 0;
+                double steerCommand = 0;
+                switch (stepNo)
+                {
+                    case 0:
+                        error = 0 - navx.getYaw();
+                        steerCommand = 0.01 * error;
+                        steerPriority(-steerCommand, steerCommand);
+                    break;
+                    case 1:
+                        steerPriority(0, 0);
+                        if (resultsl.getNew())
+                        {
+                            startDist = resultsl.getResult();
+                            stepTwoAngle = -Math.atan((startDist - 300) / 2000);
+                            stepTwoDist = Math.sqrt((2000 * 2000) + ((startDist - 300)*(startDist - 300)));
+                        }
+                    break;
+                    case 2:
+                        error = stepTwoAngle - navx.getYaw();
+                        steerCommand = 0.01 * error;
+                        steerPriority(-steerCommand, steerCommand);
+                    break;
+                    case 3:
+                        steerPriority(0, 0);
+                    break;
+                    default:
+                        steerPriority(0, 0);
+                    break;
 
-            outSpeed = outSpeed + Math.min( Math.max((power - outSpeed), -accRate), accRate);
+                }
+            }
+            if (ultrasonicWallFollower)
+            {        
+                double aimPos = 300; // how far away from the wall we want to be in mm
+                double pgain = 0.00025; // how fast we correct ourselves
+                double dgain = 0.005; // change in gain
+                double speed = 1;
+                double leftPower;
+                double rightPower;
+                pgain = 0.00025;
+                dgain = 0.005;
+                speed = 1;
+                double accRate = 0.05;
 
-            double dirPGain = pgain;
-            double dirDGain = dgain;
-            if (outSpeed < 0)
-            {
-                dirPGain = -dirPGain;
-                dirDGain = -dirDGain;
+                double power = speed;
+                if (usRevButton)
+                {
+                    power = -speed;
+                }
+
+                outSpeed = outSpeed + Math.min( Math.max((power - outSpeed), -accRate), accRate);
+
+                double dirPGain = pgain;
+                double dirDGain = dgain;
+                if (outSpeed < 0)
+                {
+                    dirPGain = -dirPGain;
+                    dirDGain = -dirDGain;
+                }
+                double error = 0;
+                if (useRightSensor)
+                {
+                    error = resultsr.getResult() - aimPos; // how far off from aimPos we are
+                }
+                else   
+                {
+                    error = aimPos - resultsl.getResult(); // how far off from aimPos we are
+                }
+                if ((useRightSensor && resultsr.getNew()) || (!useRightSensor && resultsl.getNew()))
+                {
+                    delta = error - lastError; // the change between error and lastError
+                    lastError = error;
+                }
+                steerDirection = (error * dirPGain) + (delta * dirDGain);
+                double pOutput = error * dirPGain;
+                double dOutput = delta * dirDGain;
+                SmartDashboard.putNumber("pOutput", pOutput);
+                SmartDashboard.putNumber("dOutput", dOutput);
+                SmartDashboard.putNumber("Error", error);
+                leftPower = outSpeed - steerDirection;
+                rightPower = steerDirection + outSpeed;
+                steerPriority(leftPower, rightPower);
             }
-            double error = 0;
-            if (useRightSensor)
-            {
-                error = resultsr.getResult() - aimPos; // how far off from aimPos we are
-            }
-            else   
-            {
-                error = aimPos - resultsl.getResult(); // how far off from aimPos we are
-            }
-            if ((useRightSensor && resultsr.getNew()) || (!useRightSensor && resultsl.getNew()))
-            {
-                delta = error - lastError; // the change between error and lastError
-                lastError = error;
-            }
-            steerDirection = (error * dirPGain) + (delta * dirDGain);
-            double pOutput = error * dirPGain;
-            double dOutput = delta * dirDGain;
-            SmartDashboard.putNumber("pOutput", pOutput);
-            SmartDashboard.putNumber("dOutput", dOutput);
-            SmartDashboard.putNumber("Error", error);
-            leftPower = outSpeed - steerDirection;
-            rightPower = steerDirection + outSpeed;
-            steerPriority(leftPower, rightPower);
         }
 
         else {
