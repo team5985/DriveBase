@@ -120,6 +120,8 @@ public class Robot extends TimedRobot {
 
     double delta;
     double lastError = 0;
+    double outSpeed = 0;
+
     /**
      * This function is called periodically during operator control.
      */
@@ -139,6 +141,7 @@ public class Robot extends TimedRobot {
         if (joystick.getTriggerPressed()) {
             usTrigger = !usTrigger;
             usRevButton = false;
+            outSpeed = 0;
             LeftEnc.reset();
             RightEnc.reset();
         }
@@ -179,6 +182,7 @@ public class Robot extends TimedRobot {
         pgain = 0.00025;
         dgain = 0.005;
         speed = 1;
+        double accRate = 0.05;
 
         if (usTrigger)
         {
@@ -188,9 +192,11 @@ public class Robot extends TimedRobot {
                 power = -speed;
             }
 
+            outSpeed = outSpeed + Math.min( Math.max((power - outSpeed), -accRate), accRate);
+
             double dirPGain = pgain;
             double dirDGain = dgain;
-            if (power < 0)
+            if (outSpeed < 0)
             {
                 dirPGain = -dirPGain;
                 dirDGain = -dirDGain;
@@ -207,8 +213,8 @@ public class Robot extends TimedRobot {
             SmartDashboard.putNumber("pOutput", pOutput);
             SmartDashboard.putNumber("dOutput", dOutput);
             SmartDashboard.putNumber("Error", error);
-            leftPower = power - steerDirection;
-            rightPower = steerDirection + power;
+            leftPower = outSpeed - steerDirection;
+            rightPower = steerDirection + outSpeed;
             steerPriority(leftPower, rightPower);
 
 
@@ -296,7 +302,7 @@ public class Robot extends TimedRobot {
         //     }
         // }
         else {
-            if (power >= -0.025 && power <= 0.025) {
+            if (power >= -0.05 && power <= 0.05) {
                 power = 0;
             }
             if (steerDirection >= -0.025 && steerDirection <= 0.025) {
