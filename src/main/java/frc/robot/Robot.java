@@ -17,7 +17,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.auto.AutoMode;
 import frc.robot.subsystems.Drive;
 import edu.wpi.first.wpilibj.I2C;
-
+import frc.robot.BasicMotorCheck;
 /**
  * The VM is configured to automatically run this class, and to call the
  * functions corresponding to each mode, as described in the TimedRobot
@@ -37,6 +37,8 @@ public class Robot extends TimedRobot {
     Spark LeftDrive = new Spark(7);
     Spark RightDrive = new Spark(8);
 
+
+
     Encoder LeftEnc = new Encoder(1, 2); 
     Encoder RightEnc = new Encoder(3, 4);
 
@@ -52,6 +54,14 @@ public class Robot extends TimedRobot {
     double totalDistanceTravelled = 0;
     double encoderDistance = 0;
     PowerDistributionPanel PDP = new PowerDistributionPanel(0);
+    
+
+    BasicMotorCheck checkLeftDrive1 = new BasicMotorCheck(LeftDrive,0 , PDP);
+    BasicMotorCheck checkLeftDrive2 = new BasicMotorCheck(LeftDrive,1 , PDP);
+
+    BasicMotorCheck checkRightDrive1 = new BasicMotorCheck(RightDrive,14, PDP);
+    BasicMotorCheck checkRightDrive2 = new BasicMotorCheck(RightDrive,15, PDP);
+
 
     /**
      * This function is run when the robot is first started up and should be
@@ -63,6 +73,7 @@ public class Robot extends TimedRobot {
         m_chooser.setDefaultOption("Default Auto", kDefaultAuto);
         m_chooser.addOption("My Auto", kCustomAuto);
         SmartDashboard.putData("Auto choices", m_chooser);
+        
         I2C.Port i2cp = I2C.Port.kOnboard;
         I2C usLinkl = new I2C(i2cp, 0x13);
         I2C usLinkr = new I2C(i2cp, 0x14);
@@ -121,12 +132,24 @@ public class Robot extends TimedRobot {
     double delta;
     double lastError = 0;
     double outSpeed = 0;
+    boolean useRightSensor = false;
 
     /**
      * This function is called periodically during operator control.
      */
     @Override
     public void teleopPeriodic() {
+        checkLeftDrive1.update();
+        checkLeftDrive2.update();
+        checkRightDrive1.update();
+        checkRightDrive2.update();
+        
+
+        SmartDashboard.putNumber("LeftDrive1 Check", checkLeftDrive1.BasicMotorCheck());
+        SmartDashboard.putNumber("LeftDrive2 Check", checkLeftDrive2.BasicMotorCheck());
+        SmartDashboard.putNumber("RightDrive1 Check", checkRightDrive1.BasicMotorCheck());
+        SmartDashboard.putNumber("RightDrive2 Check", checkRightDrive2.BasicMotorCheck());
+
         // 0 1 14 15
         SmartDashboard.putNumber("0", PDP.getCurrent(0));
         SmartDashboard.putNumber("1", PDP.getCurrent(1));
@@ -151,6 +174,9 @@ public class Robot extends TimedRobot {
             } 
             LeftEnc.reset();
             RightEnc.reset();
+        }
+        if (joystick.getRawButtonPressed(7)) {
+            useRightSensor = !useRightSensor;
         }
         SmartDashboard.putBoolean("Trigger", usTrigger);
         SmartDashboard.putBoolean("Reverse", usRevButton);
@@ -201,8 +227,16 @@ public class Robot extends TimedRobot {
                 dirPGain = -dirPGain;
                 dirDGain = -dirDGain;
             }
-            double error = aimPos - resultsl.getResult(); // how far off from aimPos we are
-            if (resultsl.getNew())
+            double error = 0;
+            if (useRightSensor)
+            {
+                error = resultsr.getResult() - aimPos; // how far off from aimPos we are
+            }
+            else   
+            {
+                error = aimPos - resultsl.getResult(); // how far off from aimPos we are
+            }
+            if ((useRightSensor && resultsr.getNew()) || (!useRightSensor && resultsl.getNew()))
             {
                 delta = error - lastError; // the change between error and lastError
                 lastError = error;
@@ -216,93 +250,10 @@ public class Robot extends TimedRobot {
             leftPower = outSpeed - steerDirection;
             rightPower = steerDirection + outSpeed;
             steerPriority(leftPower, rightPower);
-
-
         }
 
-        // if (usTrigger && !usRevButton) {
-        //     if (resultsl.getNew()) {
-        //         double error = aimPos - resultsl.getResult(); // how far off from aimPos we are
-        //         double delta = error - lastError; // the change between error and lastError
-        //         lastError = error;
-        //         steerDirection = (error * gain) + (delta * dgain);
-        //         power = speed;
-        //         double leftCorrect = 0;
-        //         double rightCorrect = 0;
-        //         double pOutput = error * gain;
-        //         double dOutput = delta * dgain;
-        //         if(steerDirection + power > 1) {
-        //             leftCorrect = (steerDirection + power) - 1;
-        //         }
-        //         if(steerDirection - power > 1) {
-        //             rightCorrect = (steerDirection - power) - 1;
-        //         }
-        //         if(steerDirection + power < -1) {
-        //             leftCorrect = (steerDirection + power) + 1;
-        //         }
-        //         if(steerDirection - power < -1) {
-        //             rightCorrect = (steerDirection - power) + 1;
-        //         }
-        //         SmartDashboard.putNumber("steerDirection", steerDirection);
-        //         SmartDashboard.putNumber("power", power);
-        //         SmartDashboard.putNumber("leftCorrect", leftCorrect);
-        //         SmartDashboard.putNumber("rightCorrect", rightCorrect);
-        //         SmartDashboard.putNumber("pOutput", pOutput);
-        //         SmartDashboard.putNumber("dOutput", dOutput);
-
-        //         //LeftDrive.set(steerDirection - power - leftCorrect);
-        //         //RightDrive.set(steerDirection + power - rightCorrect);
-        //         leftPower = power - steerDirection;
-        //         rightPower = steerDirection + power;
-        //         steerPriority(leftPower, rightPower);
-        //         SmartDashboard.putNumber("Encoder", encoderDistance);
-        //         SmartDashboard.putNumber("Distance Travelled", totalDistanceTravelled);
-
-        //     }
-        // }    
-        // else if (usTrigger && usRevButton) {
-        //     if (resultsl.getNew()) {
-        //         double error = aimPos - resultsl.getResult(); // how far off from aimPos we are
-        //         double delta = error - lastError; // the change between error and lastError
-        //         lastError = error;
-
-        //         steerDirection = (error * -gain) + (delta * -dgain);
-        //         power = -speed;
-        //         double leftCorrect = 0;
-        //         double rightCorrect = 0;
-        //         double pOutput = error * -gain;
-        //         double dOutput = delta * -dgain;
-        //         if(steerDirection + power > 1) {
-        //             leftCorrect = (steerDirection + power) - 1;
-        //         }
-        //         if(steerDirection - power > 1) {
-        //             rightCorrect = (steerDirection - power) - 1;
-        //         }
-        //         if(steerDirection + power < -1) {
-        //             leftCorrect = (steerDirection + power) + 1;
-        //         }
-        //         if(steerDirection - power < -1) {
-        //             rightCorrect = (steerDirection - power) + 1;
-        //         }
-        //         SmartDashboard.putNumber("steerDirection", steerDirection);
-        //         SmartDashboard.putNumber("power", power);
-        //         SmartDashboard.putNumber("leftCorrect", leftCorrect);
-        //         SmartDashboard.putNumber("rightCorrect", rightCorrect);
-        //         SmartDashboard.putNumber("pOutput", pOutput);
-        //         SmartDashboard.putNumber("dOutput", dOutput);
-
-        //         //LeftDrive.set(steerDirection - power - leftCorrect);
-        //         //RightDrive.set(steerDirection + power - rightCorrect);
-        //         leftPower = power - steerDirection;
-        //         rightPower = steerDirection + power;
-        //         steerPriority(leftPower, rightPower);
-
-        //         SmartDashboard.putNumber("Encoder", encoderDistance);
-        //         SmartDashboard.putNumber("Distance Travelled", totalDistanceTravelled);
-        //     }
-        // }
         else {
-            if (power >= -0.05 && power <= 0.05) {
+            if (power >= -0.25 && power <= 0.25) {
                 power = 0;
             }
             if (steerDirection >= -0.025 && steerDirection <= 0.025) {
