@@ -20,7 +20,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.auto.AutoMode;
 import frc.robot.subsystems.Drive;
 import edu.wpi.first.wpilibj.I2C;
-import frc.robot.BasicMotorCheck;
+import frc.robot.motorchecking.*;
 /**
  * The VM is configured to automatically run this class, and to call the
  * functions corresponding to each mode, as described in the TimedRobot
@@ -60,10 +60,10 @@ public class Robot extends TimedRobot {
     AHRS navx = new AHRS();
     
 
-    BasicMotorCheck checkLeftDrive1 = new BasicMotorCheck(LeftDrive,0 , PDP, null, LeftEnc);
-    BasicMotorCheck checkLeftDrive2 = new BasicMotorCheck(LeftDrive,1 , PDP, null, LeftEnc);
-    BasicMotorCheck checkRightDrive1 = new BasicMotorCheck(RightDrive,14, PDP, null, RightEnc);
-    BasicMotorCheck checkRightDrive2 = new BasicMotorCheck(RightDrive,15, PDP, null, RightEnc);
+    BasicMotorCheck checkLeftDrive1 = new BasicMotorCheck(LeftDrive,0 , PDP, LeftEnc, null);
+    BasicMotorCheck checkLeftDrive2 = new BasicMotorCheck(LeftDrive,1 , PDP, LeftEnc, null);
+    BasicMotorCheck checkRightDrive1 = new BasicMotorCheck(RightDrive,14, PDP, RightEnc, null);
+    BasicMotorCheck checkRightDrive2 = new BasicMotorCheck(RightDrive,15, PDP, RightEnc, null);
 
 
     /**
@@ -147,7 +147,9 @@ public class Robot extends TimedRobot {
     int stepNo = 0;
     double startDist = -1;
     double stepTwoAngle = 0;
-    double stepTwoDist = 0;
+    double stepTwoDist = 0;                
+    double steerCommand = 0;
+    double angleErr;
 
     /**
      * This function is called periodically during operator control.
@@ -170,10 +172,10 @@ public class Robot extends TimedRobot {
         SmartDashboard.putNumber("rightnc", RightEnc.getDistance());
 
 
-        SmartDashboard.putNumber("LeftDrive1 Check", checkLeftDrive1.BasicMotorCheck());
-        SmartDashboard.putNumber("LeftDrive2 Check", checkLeftDrive2.BasicMotorCheck());
-        SmartDashboard.putNumber("RightDrive1 Check", checkRightDrive1.BasicMotorCheck());
-        SmartDashboard.putNumber("RightDrive2 Check", checkRightDrive2.BasicMotorCheck());
+        SmartDashboard.putNumber("LeftDrive1 Check", checkLeftDrive1.getStatus());
+        SmartDashboard.putNumber("LeftDrive2 Check", checkLeftDrive2.getStatus());
+        SmartDashboard.putNumber("RightDrive1 Check", checkRightDrive1.getStatus());
+        SmartDashboard.putNumber("RightDrive2 Check", checkRightDrive2.getStatus());
 
         // 0 1 14 15
         SmartDashboard.putNumber("0", PDP.getCurrent(0));
@@ -232,6 +234,8 @@ public class Robot extends TimedRobot {
         }
         SmartDashboard.putNumber("Distance left", resl);
         SmartDashboard.putNumber("Step Number", stepNo);
+        SmartDashboard.putNumber("steerCommand", steerCommand);
+
 
         if (usTrigger)
         {
@@ -278,9 +282,9 @@ public class Robot extends TimedRobot {
                     break;
                 }
                 double error = 0;
-                double steerCommand = 0;
                 switch (stepNo)
                 {
+                    // step 1, zeros robot
                     case 0:
                         error = 0 - navx.getYaw();
                         delta = error - lastError;
@@ -296,6 +300,7 @@ public class Robot extends TimedRobot {
                         }
                         steerPriority(-steerCommand, steerCommand);
                     break;
+                    // stops robot, does calc
                     case 1:
                         steerPriority(0, 0);
                         if (resultsl.getNew())
@@ -309,6 +314,7 @@ public class Robot extends TimedRobot {
 
                         }
                     break;
+                    // turns to stepTwoAngle
                     case 2:
                         error = stepTwoAngle - navx.getYaw();
                         delta = error - lastError;
@@ -322,9 +328,9 @@ public class Robot extends TimedRobot {
                             //steerCommand = Math.min(steerCommand, -0.25);
                             steerCommand = steerCommand - 0.25;
                         }
-
                         steerPriority(-steerCommand, steerCommand);
                     break;
+                    // moves to stepTwoDist
                     case 3:
                         error = stepTwoDist - getEncoderPos();
                         double angleErr = stepTwoAngle - navx.getYaw();
@@ -333,12 +339,12 @@ public class Robot extends TimedRobot {
                         steerPriority(power - steerCommand, power + steerCommand);
                         
                     break;
+                    // zeros robot, goes into usWallFollow
                     case 4:
-                        steerPriority(0, 0);
                         error = 0 - navx.getYaw();
                         delta = error - lastError;
                         lastError = error;
-                        steerCommand = ( 0.005 * error ) + (0.02 * delta);
+                        steerCommand = ( 0.006 * error ) + (0.02 * delta);
                         if (steerCommand > 0) {
                             //steerCommand = Math.max(steerCommand, 0.25);
                             steerCommand = steerCommand + 0.25;

@@ -1,17 +1,11 @@
-package frc.robot;
+package frc.robot.motorchecking;
 
 import com.ctre.phoenix.motorcontrol.Faults;
-import com.ctre.phoenix.motorcontrol.StickyFaults;
-import com.ctre.phoenix.motorcontrol.can.TalonSRX;
-import com.ctre.phoenix.motorcontrol.can.WPI_TalonFX;
-import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
 import com.ctre.phoenix.motorcontrol.can.WPI_VictorSPX;
-import com.ctre.phoenix.motorcontrol.can.VictorSPX;
 
 import edu.wpi.first.wpilibj.PowerDistributionPanel;
-import edu.wpi.first.wpilibj.util.WPILibVersion;
 
-public class VictorSPXCheck {
+public class VictorSPXCheck extends MotorCheck{
     WPI_VictorSPX m_victor;
     int scancount;
     PowerDistributionPanel m_PDP;
@@ -28,16 +22,16 @@ public class VictorSPXCheck {
     }
 
 
-    public int victorSPXMotorCheck(){
+    private int checkMotor(){
     
-    if(Math.abs(m_victor.get()) >= kMinimumSpeedForCheck){
+    if(Math.abs(m_victor.get()) >= motorCheckConstants.kMinimumSpeedForCheck){
         if(scancount >= 15){
             if(checkControllerComms() == 2 || checkControllerError() == 2 || checkControllerBusVoltage() == 2 || checkEncoderRotations() == 2 || checkMotorTemperature() == 2 || checkPDPCurrent() == 2)
             {
-                if(faultScanCount >= faultScanCountMinimum){
+                if(faultScanCount >= motorCheckConstants.faultScanCountMinimum){
                     return 2;
                 }
-                else if(faultScanCount > 0 && faultScanCount < faultScanCountMinimum && faultOnLastScan == true){
+                else if(faultScanCount > 0 && faultScanCount < motorCheckConstants.faultScanCountMinimum && faultOnLastScan == true){
                     faultScanCount++;
                     return 0;
                 }
@@ -53,10 +47,10 @@ public class VictorSPXCheck {
             }
             else if(checkControllerComms() == 1 || checkControllerError() == 1 || checkControllerBusVoltage() == 1 || checkEncoderRotations() == 1 || checkMotorTemperature() == 1 || checkPDPCurrent() == 1)
             {
-                if(faultScanCount >= faultScanCountMinimum){
+                if(faultScanCount >= motorCheckConstants.faultScanCountMinimum){
                     return 1;
                 }
-                else if(faultScanCount > 0 && faultScanCount < faultScanCountMinimum && faultOnLastScan == true){
+                else if(faultScanCount > 0 && faultScanCount < motorCheckConstants.faultScanCountMinimum && faultOnLastScan == true){
                     faultScanCount++;
                     return 0;
                 }
@@ -85,11 +79,17 @@ public class VictorSPXCheck {
     }
         
     public void update() {
-        victorSPXMotorCheck();
-        if(Math.abs(m_victor.get()) >= kMinimumSpeedForCheck){
+        myStatus = checkMotor();
+        if(Math.abs(m_victor.get()) >= motorCheckConstants.kMinimumSpeedForCheck){
         scancount++;
         }
     }   
+    private int myStatus = 0;
+    
+    public int getStatus()
+    {
+        return myStatus;
+    }
 
     private int checkControllerComms() {
         if (m_victor.getDeviceID() < 0) {
@@ -98,9 +98,9 @@ public class VictorSPXCheck {
             return 0;
         }
     }
-//FIXME
+
     private int checkControllerError() {
-        Faults faults = null;
+        Faults faults = new Faults();
         m_victor.getFaults(faults);
         if (faults.hasAnyFault()) {
             return 2;
@@ -111,54 +111,40 @@ public class VictorSPXCheck {
     }
 
     private int checkControllerBusVoltage() {
-        if (m_victor.getBusVoltage() < kControllerBusVoltageShutdown) {
+        if (m_victor.getBusVoltage() < motorCheckConstants.kControllerBusVoltageShutdown) {
             return 2;
-        } else if (m_victor.getBusVoltage() < kControllerBusVoltageWarning
-                && m_victor.getBusVoltage() >= kControllerBusVoltageShutdown) {
+        } else if (m_victor.getBusVoltage() < motorCheckConstants.kControllerBusVoltageWarning
+                && m_victor.getBusVoltage() >= motorCheckConstants.kControllerBusVoltageShutdown) {
             return 1;
         } else {
             return 0;
         }
     }
-    //FIXME
-    // MAKE SURE TO TEST
-    /*private int checkMotorCurrent() {
-        if (m_victor.getSupplyCurrent() < kMotorOutputCurrentShutdown) {
+       private int checkPDPCurrent() {
+        if (m_PDP.getCurrent(m_controllerChannel) < motorCheckConstants.kPDPOutputCurrentShutdown) {
             return 2;
-        } else if (m_victor.getSupplyCurrent() < kMotorOutputCurrentWarning
-                && m_victor.getSupplyCurrent() >= kMotorOutputCurrentShutdown) {
-            return 1;
-        } else {
-            return 0;
-        }
-
-    } */
-    //FIXME
-    private int checkPDPCurrent() {
-        if (m_PDP.getCurrent(m_controllerChannel) < kPDPOutputCurrentShutdown) {
-            return 2;
-        } else if (m_PDP.getCurrent(m_controllerChannel) < kPDPOutputCurrentWarning
-                && m_PDP.getCurrent(m_controllerChannel) >= kPDPOutputCurrentShutdown) {
+        } else if (m_PDP.getCurrent(m_controllerChannel) < motorCheckConstants.kPDPOutputCurrentWarning
+                && m_PDP.getCurrent(m_controllerChannel) >= motorCheckConstants.kPDPOutputCurrentShutdown) {
             return 1;
         } else {
             return 0;
         }
     }
     private int checkEncoderRotations() {
-        if (Math.sqrt(Math.abs(m_victor.getActiveTrajectoryVelocity())) <= kEncoderVelocityShutdown) {
+        if (Math.sqrt(Math.abs(m_victor.getActiveTrajectoryVelocity())) <= motorCheckConstants.kEncoderVelocityShutdown) {
             return 2;
-        } else if (Math.abs(m_victor.get()) <= kEncoderVelocityWarning && Math.abs(m_victor.getActiveTrajectoryVelocity()) > kEncoderVelocityShutdown) {
+        } else if (Math.abs(m_victor.get()) <= motorCheckConstants.kEncoderVelocityWarning && Math.abs(m_victor.getActiveTrajectoryVelocity()) > motorCheckConstants.kEncoderVelocityShutdown) {
             return 1;
         } else {
             return 0;
         }
     }
 
-    public int checkMotorTemperature() {
-        if (m_victor.getTemperature() >= kMotorTemperatureShutdown) {
+    private int checkMotorTemperature() {
+        if (m_victor.getTemperature() >= motorCheckConstants.kMotorTemperatureShutdown) {
             return 2;
-        } else if (m_victor.getTemperature() >= kMotorTemperatureWarning
-                && m_victor.getTemperature() < kMotorTemperatureShutdown) {
+        } else if (m_victor.getTemperature() >= motorCheckConstants.kMotorTemperatureWarning
+                && m_victor.getTemperature() < motorCheckConstants.kMotorTemperatureShutdown) {
             return 1;
         } else {
             return 0;
@@ -166,18 +152,6 @@ public class VictorSPXCheck {
     }
 
 
-    private final int kMotorTemperatureShutdown = 80;
-    private final int kMotorTemperatureWarning = 55;
-    private final int kPDPOutputCurrentShutdown = 1;
-    private final int kPDPOutputCurrentWarning = 2;
-    private final int kMotorOutputCurrentShutdown = 20;
-    private final int kMotorOutputCurrentWarning = 25;
-    private final int kControllerBusVoltageShutdown = 10;
-    private final int kControllerBusVoltageWarning = 12;
-    private final int kEncoderVelocityShutdown = 1;
-    private final int kEncoderVelocityWarning = 10;
-    private final double kMinimumSpeedForCheck = 0.1;
-    private final int faultScanCountMinimum = 50;
 }
 
 
