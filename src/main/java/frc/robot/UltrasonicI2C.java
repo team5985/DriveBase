@@ -23,8 +23,11 @@ public class UltrasonicI2C
 
     /**
      * The frequency of the clock measuring the sound transit time.
+     * Version 1.0 boards with the ATTiny2313 CPU are at 0.5MHz
+     * Version 2.0 boards with the ATTiny214 CPU are at 5/6 MHz.
      */
-    final private static int TIMER_FREQ = 500000;
+    //final private static int TIMER_FREQ = 500000;
+    final private static int TIMER_FREQ = 833333;
 
     /**
      * The length in bytes of the message to read from the device.

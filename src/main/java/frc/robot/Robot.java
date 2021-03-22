@@ -244,19 +244,19 @@ public class Robot extends TimedRobot {
                 //Check transitions
                 switch (stepNo)
                 {
-                    case 0:
+                    case 0: // Rotate to 0degrees on gyro for initial measurement.
                         if (Math.abs(navx.getYaw()) < 1)
                         {
                             startDist = -1;
                             stepNo = 1;
                         }
                     break;
-                    case 1:
+                    case 1: // Stops robot and calculates.
                         if (startDist > 0)
                         {
                             stepNo = 2;
                         }
-                break;
+                    break;
                     case 2:
                         if (Math.abs(stepTwoAngle - navx.getYaw()) < 1)
                         {
@@ -332,8 +332,10 @@ public class Robot extends TimedRobot {
                     break;
                     // moves to stepTwoDist
                     case 3:
+                        double driveAngle = stepTwoAngle;
+
                         error = stepTwoDist - getEncoderPos();
-                        double angleErr = stepTwoAngle - navx.getYaw();
+                        double angleErr = driveAngle - navx.getYaw();
                         double power = error * 0.001;
                         steerCommand = angleErr * 0.0005;
                         steerPriority(power - steerCommand, power + steerCommand);
@@ -472,6 +474,7 @@ private void usWallFollower()
         double aimPos = 300; // how far away from the wall we want to be in mm
         double pgain = 0.00025; // how fast we correct ourselves
         double dgain = 0.005; // change in gain
+        dgain = 0.007;
         double speed = 1;
         double leftPower;
         double rightPower;
@@ -479,6 +482,7 @@ private void usWallFollower()
         dgain = 0.005;
         speed = 1;
         double accRate = 0.05;
+        accRate = 0.08;
 
         double power = speed;
         if (usRevButton)
