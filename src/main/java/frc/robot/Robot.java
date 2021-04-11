@@ -11,12 +11,22 @@ import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PowerDistributionPanel;
 import edu.wpi.first.wpilibj.Spark;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.kinematics.DifferentialDriveKinematics;
+
+import java.io.IOException;
+import java.nio.file.Path;
+
+import javax.lang.model.util.ElementScanner6;
 
 import com.kauailabs.navx.frc.AHRS;
 
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Encoder;
+import edu.wpi.first.wpilibj.Filesystem;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj.trajectory.Trajectory;
+import edu.wpi.first.wpilibj.trajectory.TrajectoryUtil;
 import frc.robot.auto.AutoMode;
 import frc.robot.subsystems.Drive;
 import edu.wpi.first.wpilibj.I2C;
@@ -65,6 +75,22 @@ public class Robot extends TimedRobot {
     BasicMotorCheck checkRightDrive1 = new BasicMotorCheck(RightDrive,14, PDP, RightEnc, null);
     BasicMotorCheck checkRightDrive2 = new BasicMotorCheck(RightDrive,15, PDP, RightEnc, null);
 
+    // for *your* robot's drive.
+    // The Robot Characterization Toolsuite provides a convenient tool for obtaining these
+    // values for your robot.
+    public static final double ksVolts = 2.34;
+    public static final double kvVoltSecondsPerMeter = 2.53;
+    public static final double kaVoltSecondsSquaredPerMeter = 0.2;
+
+    public static final double kPDriveVel = 2.67;
+    public static final double kDDriveVel = 0.228;
+
+    public static final double kTrackwidthMeters = 0.6365917184943187;
+    public static final DifferentialDriveKinematics kDriveKinematics =
+        new DifferentialDriveKinematics(kTrackwidthMeters);
+
+    public static final double kRamseteZeta = 0.7;
+
 
     /**
      * This function is run when the robot is first started up and should be
@@ -92,9 +118,13 @@ public class Robot extends TimedRobot {
      * LiveWindow and SmartDashboard integrated updating.
      */
     @Override
-    public void robotPeriodic() {
+    public void robotPeriodic()
+    {
+        SmartDashboard.putNumber("POV", joystick.getPOV());
+        System.out.println("POV - " + joystick.getPOV());
     }
 
+    Trajectory trajectory = new Trajectory();
     /**
      * This autonomous (along with the chooser code above) shows how to select
      * between different autonomous modes using the dashboard. The sendable
@@ -108,10 +138,18 @@ public class Robot extends TimedRobot {
      */
     @Override
     public void autonomousInit() {
-        m_autoSelected = m_chooser.getSelected();
+        /*m_autoSelected = m_chooser.getSelected();
         // m_autoSelected = SmartDashboard.getString("Auto Selector", kDefaultAuto);
         System.out.println("Auto selected: " + m_autoSelected);
-        m_AutoController.getInstance().initialiseAuto();
+        m_AutoController.getInstance().initialiseAuto();*/
+        //String pathDir = "C:/Users/Graham/Documents/Pathweaver_test/PathWeaver/output/Unnamed.path";
+        String pathDir = "paths/Unnamed.wpilib.json";
+        try {
+            Path trajectoryPath = Filesystem.getDeployDirectory().toPath().resolve(pathDir);
+            trajectory = TrajectoryUtil.fromPathweaverJson(trajectoryPath);
+         } catch (IOException ex) {
+            DriverStation.reportError("Unable to open trajectory: " + pathDir, ex.getStackTrace());
+         }
     }
 
     /**
@@ -121,7 +159,8 @@ public class Robot extends TimedRobot {
     public void autonomousPeriodic() {
         usi2cl.update();
         usi2cr.update();
-        m_AutoController.getInstance().runAuto();
+        /*m_AutoController.getInstance().runAuto();*/
+
     }
   
 
@@ -136,14 +175,15 @@ public class Robot extends TimedRobot {
     double lastError = 0;
     double outSpeed = 0;
     boolean useRightSensor = false;
-    boolean ultrasonicWallFollower = false;
+    boolean ultrasonicWallFollower = true;
+    boolean povControl = true;
 
     double leftEncDist;
     double rightEncDist;
     double encoderDist;
 
     // Variables for the sequenced hybrid controller
-    boolean sequencedHybrid = true;
+    boolean sequencedHybrid = false;
     int stepNo = 0;
     double startDist = -1;
     double stepTwoAngle = 0;
@@ -236,8 +276,51 @@ public class Robot extends TimedRobot {
         SmartDashboard.putNumber("Step Number", stepNo);
         SmartDashboard.putNumber("steerCommand", steerCommand);
 
+        if (povControl)
+        {
+            if (joystick.getPOV() == 45)
+            {
+                usRevButton = false;
+                useRightSensor = true;
+                usWallFollower();
+            }
+            else if (joystick.getPOV() == 135)
+            {
+                usRevButton = true;
+                useRightSensor = true;
+                usWallFollower();
+            }
+            else if (joystick.getPOV() == 225)
+            {
+                usRevButton = true;
+                useRightSensor = false;
+                usWallFollower();
+            }
+            else if (joystick.getPOV() == 315)
+            {
+                usRevButton = false;
+                useRightSensor = false;
+                usWallFollower();
+           }
+            else
+            {
+                throttle = (-1 * joystick.getThrottle() + 1) / 2;
+                steerDirection = joystick.getX() * throttle;
+                power = -1 * joystick.getY() * throttle;
 
-        if (usTrigger)
+                if (power >= -0.25 && power <= 0.25) {
+                    power = 0;
+                }
+                if (steerDirection >= -0.025 && steerDirection <= 0.025) {
+                    steerDirection = 0;
+                }
+
+                steerPriority(power - steerDirection, steerDirection + power);
+                steerDirection = 0;
+                SmartDashboard.putNumber("steerDirection", steerDirection);
+            }
+        }
+        else if (usTrigger)
         {
             if (sequencedHybrid)
             {
@@ -320,6 +403,7 @@ public class Robot extends TimedRobot {
                         delta = error - lastError;
                         lastError = error;
                         steerCommand = ( 0.005 * error ) + (0.02 * delta);
+                        steerCommand = ( 0.01 * error ) + (0.02 * delta);
                         if (steerCommand > 0) {
                             //steerCommand = Math.max(steerCommand, 0.25);
                             steerCommand = steerCommand + 0.25;
@@ -347,6 +431,7 @@ public class Robot extends TimedRobot {
                         delta = error - lastError;
                         lastError = error;
                         steerCommand = ( 0.006 * error ) + (0.02 * delta);
+                        steerCommand = ( 0.01 * error ) + (0.02 * delta);
                         if (steerCommand > 0) {
                             //steerCommand = Math.max(steerCommand, 0.25);
                             steerCommand = steerCommand + 0.25;
@@ -480,7 +565,8 @@ private void usWallFollower()
         double rightPower;
         pgain = 0.00025;
         dgain = 0.005;
-        speed = 1;
+        dgain = 0.005;
+        pgain = 0.00025;
         double accRate = 0.05;
         accRate = 0.08;
 
@@ -567,6 +653,11 @@ private void steerPriority(double left, double right)
     public void disabledPeriodic() {
         usi2cl.update();
         usi2cr.update();
+        leftEncDist = LeftEnc.getDistance();
+        rightEncDist = -RightEnc.getDistance();
+        SmartDashboard.putNumber("Left Raw Encoder", leftEncDist);
+        SmartDashboard.putNumber("Right Raw Encoder", rightEncDist);
+    
     }
 
     /**
